@@ -1,4 +1,4 @@
-// COPIA TODO ESTO Y REEMPLAZA EL CONTENIDO DE AppContext.tsx
+// COPIA TODO ESTO Y REEMPLAZA EL CO2NTENIDO DE AppContext.tsx
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Room, Client, Product, Reservation, Sale, MaintenanceItem, User } from '../types';
