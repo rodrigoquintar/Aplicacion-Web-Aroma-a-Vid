@@ -32,34 +32,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [sales, setSales] = useState<Sale[]>([]);
 
   // =========================================================================
-  // 1. CARGA DE DATOS (TRADUCCIÓN: BASE DE DATOS -> APP)
+  // 1. CARGA DE DATOS (Sincronización Nube -> App)
   // =========================================================================
   useEffect(() => {
     const loadAllData = async () => {
       console.log("📥 Descargando datos de Supabase...");
       
-      // Habitaciones: name <-> number
       const { data: r } = await supabase.from('rooms').select('*');
-      if (r && r.length > 0) {
-        setRooms(r.map((item: any) => ({
-          ...item,
-          name: item.number || item.name // Si viene como 'number', lo usamos como 'name'
-        })));
-      }
+      if (r && r.length > 0) setRooms(r.map(item => ({ ...item, name: item.number || item.name })));
       
       const { data: cl } = await supabase.from('clients').select('*');
       if (cl && cl.length > 0) setClients(cl);
 
-      // Reservas: TRADUCCIÓN CRÍTICA
       const { data: res } = await supabase.from('reservations').select('*');
       if (res && res.length > 0) {
-        const appReservations = res.map((dbRes: any) => ({
+        setReservations(res.map((dbRes: any) => ({
           ...dbRes,
-          paidAmount: dbRes.deposit,          // DB 'deposit' -> App 'paidAmount'
-          totalPrice: dbRes.totalAmount,      // DB 'totalAmount' -> App 'totalPrice'
-          guests: dbRes.numberOfPeople        // DB 'numberOfPeople' -> App 'guests'
-        }));
-        setReservations(appReservations);
+          paidAmount: dbRes.deposit ?? dbRes.paidAmount,
+          totalPrice: dbRes.totalAmount ?? dbRes.totalPrice,
+          guests: dbRes.numberOfPeople ?? dbRes.guests
+        })));
       }
 
       const { data: prod } = await supabase.from('products').select('*');
@@ -75,76 +67,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // =========================================================================
-  // 2. GUARDADO DE DATOS (TRADUCCIÓN: APP -> BASE DE DATOS)
+  // 2. GUARDADO AUTOMÁTICO (Sincronización App -> Nube)
   // =========================================================================
 
-  // Guardar Habitaciones
-  useEffect(() => {
-    if (rooms.length > 0) {
-      const dbRooms = rooms.map(r => ({
-        ...r,
-        number: r.name // App 'name' -> DB 'number'
-      }));
-      supabase.from('rooms').upsert(dbRooms).then(({error}) => {
-        if(error) console.error("Error Habitaciones:", error.message);
-      });
-    }
+  const sync = async (table: string, data: any) => {
+    if (!data || data.length === 0) return;
+    const { error } = await supabase.from(table).upsert(data);
+    if (error) console.error(`❌ Error sincronizando ${table}:`, error.message);
+  };
+
+  useEffect(() => { 
+    const dbRooms = rooms.map(r => ({ ...r, number: r.name }));
+    sync('rooms', dbRooms); 
   }, [rooms]);
 
-  // Guardar Reservas (TRADUCCIÓN CRÍTICA PARA SEÑA)
   useEffect(() => {
-    if (reservations.length > 0) {
-      const dbReservations = reservations.map(r => ({
-        id: r.id,
-        clientId: r.clientId,
-        roomId: r.roomId,
-        checkIn: r.checkIn,
-        checkOut: r.checkOut,
-        checkInTime: r.checkInTime || "14:00",
-        checkOutTime: r.checkOutTime || "10:00",
-        status: r.status,
-        storeCharges: r.storeCharges || 0,
-        paymentStatus: r.paymentStatus || 'pending',
-        
-        // AQUÍ OCURRE LA MAGIA:
-        deposit: r.paidAmount,        // App 'paidAmount' -> DB 'deposit'
-        totalAmount: r.totalPrice,    // App 'totalPrice' -> DB 'totalAmount'
-        numberOfPeople: r.guests      // App 'guests' -> DB 'numberOfPeople'
-      }));
-
-      supabase.from('reservations').upsert(dbReservations).then(({ error }) => {
-        if (error) console.error("❌ Error Reservas:", error.message);
-        else console.log("✅ Reservas (y seña) guardadas.");
-      });
-    }
+    const dbRes = reservations.map(r => ({
+      ...r,
+      deposit: r.paidAmount,
+      totalAmount: r.totalPrice,
+      numberOfPeople: r.guests
+    }));
+    sync('reservations', dbRes);
   }, [reservations]);
 
-  // Guardar Productos (Stock)
-  useEffect(() => {
-    if (products.length > 0) {
-      supabase.from('products').upsert(products).then(({ error }) => {
-        if (error) console.error("Error Productos:", error.message);
-      });
-    }
-  }, [products]);
+  useEffect(() => { sync('products', products); }, [products]);
+  useEffect(() => { sync('clients', clients); }, [clients]);
+  useEffect(() => { sync('sales', sales); }, [sales]);
+  useEffect(() => { sync('maintenanceItems', maintenanceItems); }, [maintenanceItems]);
 
-  // Guardar Clientes
-  useEffect(() => {
-    if (clients.length > 0) supabase.from('clients').upsert(clients).then();
-  }, [clients]);
-
-  // Guardar Ventas
-  useEffect(() => {
-    if (sales.length > 0) supabase.from('sales').upsert(sales).then();
-  }, [sales]);
-
-  // Guardar Insumos
-  useEffect(() => {
-    if (maintenanceItems.length > 0) supabase.from('maintenanceItems').upsert(maintenanceItems).then();
-  }, [maintenanceItems]);
-
-
-  // --- FUNCIONES DEL SISTEMA ---
+  // =========================================================================
+  // 3. FUNCIONES DE LÓGICA
+  // =========================================================================
   const login = (pin: string) => {
     if (USERS[pin]) {
       setCurrentUser(USERS[pin]);
@@ -162,6 +116,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateRoomStatus = (id: string, status: any) => {
     setRooms(prev => prev.map(r => r.id === id ? { ...r, status } : r));
   };
+
   const addRoom = (room: any) => setRooms(prev => [...prev, room]);
   const updateRoom = (room: any) => setRooms(prev => prev.map(r => r.id === room.id ? room : r));
   const deleteRoom = (id: string) => {
@@ -189,8 +144,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setProducts(prev => prev.filter(p => p.id !== id));
     supabase.from('products').delete().eq('id', id).then();
   };
+
   const updateProductStock = (id: string, q: number) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, stock: p.stock + q } : p));
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, stock: Number(p.stock) + q } : p));
   };
 
   const addMaintenanceItem = (m: any) => setMaintenanceItems(prev => [...prev, m]);
@@ -199,16 +155,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setMaintenanceItems(prev => prev.filter(m => m.id !== id));
     supabase.from('maintenanceItems').delete().eq('id', id).then();
   };
+
   const updateMaintenanceStock = (id: string, q: number) => {
-    setMaintenanceItems(prev => prev.map(m => m.id === id ? { ...m, stock: m.stock + q } : m));
+    setMaintenanceItems(prev => prev.map(m => m.id === id ? { ...m, stock: Number(m.stock) + q } : m));
   };
+
   const updateReservationStatus = (id: string, status: any) => {
     setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
   };
 
   const getRoomById = (id: string) => rooms.find(r => r.id === id);
   const getClientById = (id: string) => clients.find(c => c.id === id);
-  const restoreBackup = () => {};
 
   return (
     <AppContext.Provider value={{
@@ -216,7 +173,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       login, logout, updateRoomStatus, addRoom, updateRoom, deleteRoom, addClient, deleteClient, addReservation,
       updateReservation, deleteReservation, updateReservationStatus, addSale, addProduct, updateProduct,
       deleteProduct, updateProductStock, addMaintenanceItem, updateMaintenanceItem, deleteMaintenanceItem, 
-      updateMaintenanceStock, getRoomById, getClientById, restoreBackup
+      updateMaintenanceStock, getRoomById, getClientById
     }}>
       {children}
     </AppContext.Provider>
