@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 import { Room, Client, Product, Reservation, Sale, MaintenanceItem, User } from '../types';
 import { INITIAL_ROOMS, INITIAL_CLIENTS, INITIAL_PRODUCTS, INITIAL_RESERVATIONS, INITIAL_MAINTENANCE_ITEMS } from '../constants';
 
-// Configuración de conexión
 const supabaseUrl = 'https://iwpydnfpgxulocinakyg.supabase.co';
 const supabaseAnonKey = 'sb_publishable_qY7uXtVTaiqUzyOsHu2s8A_Q06ej0cZ'; 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -31,10 +30,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [reservations, setReservations] = useState<Reservation[]>(INITIAL_RESERVATIONS);
   const [sales, setSales] = useState<Sale[]>([]);
 
-  // 1. CARGA INICIAL DE TODAS LAS TABLAS
+  // 1. CARGA INICIAL (Prioridad total a Supabase)
   useEffect(() => {
     const loadAllData = async () => {
-      console.log("Sincronizando con la nube...");
+      console.log("Sincronizando con Supabase...");
       
       const { data: r } = await supabase.from('rooms').select('*');
       if (r && r.length > 0) setRooms(r);
@@ -57,63 +56,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     loadAllData();
   }, []);
 
-  // 2. GUARDADO AUTOMÁTICO (PERSISTENCIA)
-  
-  // Habitaciones
-  useEffect(() => {
-    if (rooms.length > 0) {
-      supabase.from('rooms').upsert(rooms).then(({ error }) => {
-        if (error) console.error("Error rooms:", error.message);
-      });
+  // 2. SISTEMA DE GUARDADO CON ALERTAS DE ERROR
+  const saveData = async (table: string, payload: any) => {
+    if (!payload || payload.length === 0) return;
+    const { error } = await supabase.from(table).upsert(payload);
+    if (error) {
+      console.error(`❌ ERROR en tabla ${table}:`, error.message);
+      console.error("Causa probable: Columna faltante o nombre incorrecto.");
+    } else {
+      console.log(`✅ Tabla ${table} sincronizada.`);
     }
-  }, [rooms]);
+  };
 
-  // Clientes
-  useEffect(() => {
-    if (clients.length > 0) {
-      supabase.from('clients').upsert(clients).then(({ error }) => {
-        if (error) console.error("Error clients:", error.message);
-      });
-    }
-  }, [clients]);
+  useEffect(() => { saveData('rooms', rooms); }, [rooms]);
+  useEffect(() => { saveData('clients', clients); }, [clients]);
+  useEffect(() => { saveData('reservations', reservations); }, [reservations]);
+  useEffect(() => { saveData('products', products); }, [products]);
+  useEffect(() => { saveData('sales', sales); }, [sales]);
+  useEffect(() => { saveData('maintenanceItems', maintenanceItems); }, [maintenanceItems]);
 
-  // Reservas
-  useEffect(() => {
-    if (reservations.length > 0) {
-      supabase.from('reservations').upsert(reservations).then(({ error }) => {
-        if (error) console.error("Error reservations:", error.message);
-      });
-    }
-  }, [reservations]);
-
-  // Productos (Stock)
-  useEffect(() => {
-    if (products.length > 0) {
-      supabase.from('products').upsert(products).then(({ error }) => {
-        if (error) console.error("Error products:", error.message);
-      });
-    }
-  }, [products]);
-
-  // Ventas
-  useEffect(() => {
-    if (sales.length > 0) {
-      supabase.from('sales').upsert(sales).then(({ error }) => {
-        if (error) console.error("Error sales:", error.message);
-      });
-    }
-  }, [sales]);
-
-  // Mantenimiento
-  useEffect(() => {
-    if (maintenanceItems.length > 0) {
-      supabase.from('maintenanceItems').upsert(maintenanceItems).then(({ error }) => {
-        if (error) console.error("Error maintenance:", error.message);
-      });
-    }
-  }, [maintenanceItems]);
-
-  // --- FUNCIONES DE LA APP ---
+  // FUNCIONES DE ACTUALIZACIÓN
   const login = (pin: string) => {
     if (USERS[pin]) {
       setCurrentUser(USERS[pin]);
