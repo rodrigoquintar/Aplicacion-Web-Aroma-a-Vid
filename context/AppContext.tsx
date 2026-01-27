@@ -1,12 +1,11 @@
-
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Room, Client, Product, Reservation, Sale, RoomStatus, ReservationStatus, MaintenanceItem, User } from '../types';
+import { Room, Client, Product, Reservation, Sale, MaintenanceItem, User } from '../types';
 import { INITIAL_ROOMS, INITIAL_CLIENTS, INITIAL_PRODUCTS, INITIAL_RESERVATIONS, INITIAL_MAINTENANCE_ITEMS } from '../constants';
 
-// Conexión a la nube
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Configuración de conexión
+const supabaseUrl = 'https://iwpydnfpgxulocinakyg.supabase.co';
+const supabaseAnonKey = 'sb_publishable_qY7uXtVTaiqUzyOsHu2s8A_Q06ej0cZ'; 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const PIN_ADMIN = "0209";
@@ -17,7 +16,7 @@ const USERS: Record<string, User> = {
   [PIN_REC]: { id: 'u2', name: 'Recepcionista', role: 'receptionist' },
 };
 
-// ... (Interfaz AppContextType se mantiene igual que la tuya)
+export const AppContext = createContext<any>(null);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -25,7 +24,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Estados de datos
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
@@ -33,29 +31,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [reservations, setReservations] = useState<Reservation[]>(INITIAL_RESERVATIONS);
   const [sales, setSales] = useState<Sale[]>([]);
 
-  // CARGAR DATOS AL INICIAR
+  // 1. CARGA INICIAL DE TODAS LAS TABLAS
   useEffect(() => {
-    const loadCloudData = async () => {
-      const { data: cloudRooms } = await supabase.from('rooms').select('*');
-      if (cloudRooms && cloudRooms.length > 0) setRooms(cloudRooms);
+    const loadAllData = async () => {
+      console.log("Sincronizando con la nube...");
       
-      const { data: cloudRes } = await supabase.from('reservations').select('*');
-      if (cloudRes) setReservations(cloudRes);
+      const { data: r } = await supabase.from('rooms').select('*');
+      if (r && r.length > 0) setRooms(r);
       
-      // ... repetir para clientes y productos
+      const { data: cl } = await supabase.from('clients').select('*');
+      if (cl && cl.length > 0) setClients(cl);
+
+      const { data: res } = await supabase.from('reservations').select('*');
+      if (res && res.length > 0) setReservations(res);
+
+      const { data: prod } = await supabase.from('products').select('*');
+      if (prod && prod.length > 0) setProducts(prod);
+
+      const { data: sls } = await supabase.from('sales').select('*');
+      if (sls && sls.length > 0) setSales(sls);
+
+      const { data: maint } = await supabase.from('maintenanceItems').select('*');
+      if (maint && maint.length > 0) setMaintenanceItems(maint);
     };
-    loadCloudData();
+    loadAllData();
   }, []);
 
-  // GUARDAR AUTOMÁTICAMENTE CUANDO ALGO CAMBIE
+  // 2. GUARDADO AUTOMÁTICO (PERSISTENCIA)
+  
+  // Habitaciones
   useEffect(() => {
-    const sync = async () => {
-      await supabase.from('rooms').upsert(rooms);
-      await supabase.from('reservations').upsert(reservations);
-    };
-    sync();
-  }, [rooms, reservations]);
+    if (rooms.length > 0) {
+      supabase.from('rooms').upsert(rooms).then(({ error }) => {
+        if (error) console.error("Error rooms:", error.message);
+      });
+    }
+  }, [rooms]);
 
+  // Clientes
+  useEffect(() => {
+    if (clients.length > 0) {
+      supabase.from('clients').upsert(clients).then(({ error }) => {
+        if (error) console.error("Error clients:", error.message);
+      });
+    }
+  }, [clients]);
+
+  // Reservas
+  useEffect(() => {
+    if (reservations.length > 0) {
+      supabase.from('reservations').upsert(reservations).then(({ error }) => {
+        if (error) console.error("Error reservations:", error.message);
+      });
+    }
+  }, [reservations]);
+
+  // Productos (Stock)
+  useEffect(() => {
+    if (products.length > 0) {
+      supabase.from('products').upsert(products).then(({ error }) => {
+        if (error) console.error("Error products:", error.message);
+      });
+    }
+  }, [products]);
+
+  // Ventas
+  useEffect(() => {
+    if (sales.length > 0) {
+      supabase.from('sales').upsert(sales).then(({ error }) => {
+        if (error) console.error("Error sales:", error.message);
+      });
+    }
+  }, [sales]);
+
+  // Mantenimiento
+  useEffect(() => {
+    if (maintenanceItems.length > 0) {
+      supabase.from('maintenanceItems').upsert(maintenanceItems).then(({ error }) => {
+        if (error) console.error("Error maintenance:", error.message);
+      });
+    }
+  }, [maintenanceItems]);
+
+  // --- FUNCIONES DE LA APP ---
   const login = (pin: string) => {
     if (USERS[pin]) {
       setCurrentUser(USERS[pin]);
@@ -70,8 +128,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('AROMA_SESSION');
   };
 
-  // ... (Aquí van tus funciones addRoom, updateRoom, etc., que ya tienes)
-  // Las funciones funcionarán igual, pero los useEffect de arriba se encargan de subir los cambios.
+  const updateRoomStatus = (id: string, status: any) => {
+    setRooms(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  };
+  const addRoom = (room: any) => setRooms(prev => [...prev, room]);
+  const updateRoom = (room: any) => setRooms(prev => prev.map(r => r.id === room.id ? room : r));
+  const deleteRoom = (id: string) => {
+    setRooms(prev => prev.filter(r => r.id !== id));
+    supabase.from('rooms').delete().eq('id', id).then();
+  };
+  
+  const addReservation = (res: any) => setReservations(prev => [...prev, res]);
+  const updateReservation = (res: any) => setReservations(prev => prev.map(r => r.id === res.id ? res : r));
+  const deleteReservation = (id: string) => {
+     setReservations(prev => prev.filter(r => r.id !== id));
+     supabase.from('reservations').delete().eq('id', id).then();
+  };
+
+  const addClient = (client: any) => setClients(prev => [...prev, client]);
+  const deleteClient = (id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id));
+    supabase.from('clients').delete().eq('id', id).then();
+  };
+
+  const addSale = (sale: any) => setSales(prev => [...prev, sale]);
+  const addProduct = (p: any) => setProducts(prev => [...prev, p]);
+  const updateProduct = (p: any) => setProducts(prev => prev.map(item => item.id === p.id ? p : item));
+  const deleteProduct = (id: string) => {
+    setProducts(prev => prev.filter(p => p.id !== id));
+    supabase.from('products').delete().eq('id', id).then();
+  };
+  const updateProductStock = (id: string, q: number) => {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, stock: p.stock + q } : p));
+  };
+
+  const addMaintenanceItem = (m: any) => setMaintenanceItems(prev => [...prev, m]);
+  const updateMaintenanceItem = (m: any) => setMaintenanceItems(prev => prev.map(item => item.id === m.id ? m : item));
+  const deleteMaintenanceItem = (id: string) => {
+    setMaintenanceItems(prev => prev.filter(m => m.id !== id));
+    supabase.from('maintenanceItems').delete().eq('id', id).then();
+  };
+  const updateMaintenanceStock = (id: string, q: number) => {
+    setMaintenanceItems(prev => prev.map(m => m.id === id ? { ...m, stock: m.stock + q } : m));
+  };
+
+  const updateReservationStatus = (id: string, status: any) => {
+    setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  };
+
+  const getRoomById = (id: string) => rooms.find(r => r.id === id);
+  const getClientById = (id: string) => clients.find(c => c.id === id);
+  const restoreBackup = () => {};
 
   return (
     <AppContext.Provider value={{
@@ -84,4 +191,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       {children}
     </AppContext.Provider>
   );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useApp must be used within an AppProvider');
+  return context;
 };
