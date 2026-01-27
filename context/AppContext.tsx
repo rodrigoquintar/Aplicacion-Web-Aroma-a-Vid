@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Room, Client, Product, Reservation, Sale, MaintenanceItem, User } from '../types';
 import { INITIAL_ROOMS, INITIAL_CLIENTS, INITIAL_PRODUCTS, INITIAL_RESERVATIONS, INITIAL_MAINTENANCE_ITEMS } from '../constants';
 
+// --- CONFIGURACIÓN SUPABASE ---
 const supabaseUrl = 'https://iwpydnfpgxulocinakyg.supabase.co';
 const supabaseAnonKey = 'sb_publishable_qY7uXtVTaiqUzyOsHu2s8A_Q06ej0cZ'; 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -30,19 +31,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [reservations, setReservations] = useState<Reservation[]>(INITIAL_RESERVATIONS);
   const [sales, setSales] = useState<Sale[]>([]);
 
-  // 1. CARGA INICIAL (Prioridad total a Supabase)
+  // =========================================================================
+  // 1. CARGA DE DATOS (TRADUCCIÓN: BASE DE DATOS -> APP)
+  // =========================================================================
   useEffect(() => {
     const loadAllData = async () => {
-      console.log("Sincronizando con Supabase...");
+      console.log("📥 Descargando datos de Supabase...");
       
+      // Habitaciones: name <-> number
       const { data: r } = await supabase.from('rooms').select('*');
-      if (r && r.length > 0) setRooms(r);
+      if (r && r.length > 0) {
+        setRooms(r.map((item: any) => ({
+          ...item,
+          name: item.number || item.name // Si viene como 'number', lo usamos como 'name'
+        })));
+      }
       
       const { data: cl } = await supabase.from('clients').select('*');
       if (cl && cl.length > 0) setClients(cl);
 
+      // Reservas: TRADUCCIÓN CRÍTICA
       const { data: res } = await supabase.from('reservations').select('*');
-      if (res && res.length > 0) setReservations(res);
+      if (res && res.length > 0) {
+        const appReservations = res.map((dbRes: any) => ({
+          ...dbRes,
+          paidAmount: dbRes.deposit,          // DB 'deposit' -> App 'paidAmount'
+          totalPrice: dbRes.totalAmount,      // DB 'totalAmount' -> App 'totalPrice'
+          guests: dbRes.numberOfPeople        // DB 'numberOfPeople' -> App 'guests'
+        }));
+        setReservations(appReservations);
+      }
 
       const { data: prod } = await supabase.from('products').select('*');
       if (prod && prod.length > 0) setProducts(prod);
@@ -56,26 +74,77 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     loadAllData();
   }, []);
 
-  // 2. SISTEMA DE GUARDADO CON ALERTAS DE ERROR
-  const saveData = async (table: string, payload: any) => {
-    if (!payload || payload.length === 0) return;
-    const { error } = await supabase.from(table).upsert(payload);
-    if (error) {
-      console.error(`❌ ERROR en tabla ${table}:`, error.message);
-      console.error("Causa probable: Columna faltante o nombre incorrecto.");
-    } else {
-      console.log(`✅ Tabla ${table} sincronizada.`);
+  // =========================================================================
+  // 2. GUARDADO DE DATOS (TRADUCCIÓN: APP -> BASE DE DATOS)
+  // =========================================================================
+
+  // Guardar Habitaciones
+  useEffect(() => {
+    if (rooms.length > 0) {
+      const dbRooms = rooms.map(r => ({
+        ...r,
+        number: r.name // App 'name' -> DB 'number'
+      }));
+      supabase.from('rooms').upsert(dbRooms).then(({error}) => {
+        if(error) console.error("Error Habitaciones:", error.message);
+      });
     }
-  };
+  }, [rooms]);
 
-  useEffect(() => { saveData('rooms', rooms); }, [rooms]);
-  useEffect(() => { saveData('clients', clients); }, [clients]);
-  useEffect(() => { saveData('reservations', reservations); }, [reservations]);
-  useEffect(() => { saveData('products', products); }, [products]);
-  useEffect(() => { saveData('sales', sales); }, [sales]);
-  useEffect(() => { saveData('maintenanceItems', maintenanceItems); }, [maintenanceItems]);
+  // Guardar Reservas (TRADUCCIÓN CRÍTICA PARA SEÑA)
+  useEffect(() => {
+    if (reservations.length > 0) {
+      const dbReservations = reservations.map(r => ({
+        id: r.id,
+        clientId: r.clientId,
+        roomId: r.roomId,
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        checkInTime: r.checkInTime || "14:00",
+        checkOutTime: r.checkOutTime || "10:00",
+        status: r.status,
+        storeCharges: r.storeCharges || 0,
+        paymentStatus: r.paymentStatus || 'pending',
+        
+        // AQUÍ OCURRE LA MAGIA:
+        deposit: r.paidAmount,        // App 'paidAmount' -> DB 'deposit'
+        totalAmount: r.totalPrice,    // App 'totalPrice' -> DB 'totalAmount'
+        numberOfPeople: r.guests      // App 'guests' -> DB 'numberOfPeople'
+      }));
 
-  // FUNCIONES DE ACTUALIZACIÓN
+      supabase.from('reservations').upsert(dbReservations).then(({ error }) => {
+        if (error) console.error("❌ Error Reservas:", error.message);
+        else console.log("✅ Reservas (y seña) guardadas.");
+      });
+    }
+  }, [reservations]);
+
+  // Guardar Productos (Stock)
+  useEffect(() => {
+    if (products.length > 0) {
+      supabase.from('products').upsert(products).then(({ error }) => {
+        if (error) console.error("Error Productos:", error.message);
+      });
+    }
+  }, [products]);
+
+  // Guardar Clientes
+  useEffect(() => {
+    if (clients.length > 0) supabase.from('clients').upsert(clients).then();
+  }, [clients]);
+
+  // Guardar Ventas
+  useEffect(() => {
+    if (sales.length > 0) supabase.from('sales').upsert(sales).then();
+  }, [sales]);
+
+  // Guardar Insumos
+  useEffect(() => {
+    if (maintenanceItems.length > 0) supabase.from('maintenanceItems').upsert(maintenanceItems).then();
+  }, [maintenanceItems]);
+
+
+  // --- FUNCIONES DEL SISTEMA ---
   const login = (pin: string) => {
     if (USERS[pin]) {
       setCurrentUser(USERS[pin]);
@@ -133,7 +202,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateMaintenanceStock = (id: string, q: number) => {
     setMaintenanceItems(prev => prev.map(m => m.id === id ? { ...m, stock: m.stock + q } : m));
   };
-
   const updateReservationStatus = (id: string, status: any) => {
     setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
   };
