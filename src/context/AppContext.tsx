@@ -4,8 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import { Room, Client, Product, Reservation, Sale, MaintenanceItem, User } from '../types';
 import { INITIAL_ROOMS, INITIAL_CLIENTS, INITIAL_PRODUCTS, INITIAL_RESERVATIONS, INITIAL_MAINTENANCE_ITEMS } from '../constants';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = 'https://iwpydnfpgxulocinakyg.supabase.co';
+const supabaseAnonKey = 'sb_publishable_qY7uXtVTaiqUzyOsHu2s8A_Q06ej0cZ'; // Pega aquí toda tu llave larga;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const PIN_ADMIN = "0209";
