@@ -32,64 +32,66 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [sales, setSales] = useState<Sale[]>([]);
 
   // =========================================================================
-  // 1. CARGA DE DATOS (Sincronización Nube -> App)
+  // 1. CARGA DE DATOS (BLINDAJE CONTRA $NaN)
   // =========================================================================
   useEffect(() => {
     const loadAllData = async () => {
-      console.log("📥 Descargando datos de Supabase...");
+      console.log("📥 Sincronizando datos...");
       
       const { data: r } = await supabase.from('rooms').select('*');
-      if (r && r.length > 0) setRooms(r.map(item => ({ ...item, name: item.number || item.name })));
+      if (r && r.length > 0) setRooms(r);
       
       const { data: cl } = await supabase.from('clients').select('*');
       if (cl && cl.length > 0) setClients(cl);
 
+      // AQUÍ SOLUCIONAMOS EL $NaN
       const { data: res } = await supabase.from('reservations').select('*');
       if (res && res.length > 0) {
-        setReservations(res.map((dbRes: any) => ({
-          ...dbRes,
-          paidAmount: dbRes.deposit ?? dbRes.paidAmount,
-          totalPrice: dbRes.totalAmount ?? dbRes.totalPrice,
-          guests: dbRes.numberOfPeople ?? dbRes.guests
-        })));
+        const cleanReservations = res.map((item: any) => ({
+          ...item,
+          // Priorizamos paidAmount, si no existe buscamos deposit, si no es 0. SIEMPRE NUMERO.
+          paidAmount: Number(item.paidAmount ?? item.deposit ?? 0),
+          totalPrice: Number(item.totalPrice ?? item.totalAmount ?? 0),
+          guests: Number(item.guests ?? item.numberOfPeople ?? 1),
+          // Aseguramos que checkInTime exista
+          checkInTime: item.checkInTime || "14:00"
+        }));
+        setReservations(cleanReservations);
       }
 
+      // Stock numérico para productos
       const { data: prod } = await supabase.from('products').select('*');
-      if (prod && prod.length > 0) setProducts(prod);
+      if (prod && prod.length > 0) {
+        setProducts(prod.map((p: any) => ({ ...p, stock: Number(p.stock || 0) })));
+      }
 
       const { data: sls } = await supabase.from('sales').select('*');
       if (sls && sls.length > 0) setSales(sls);
 
+      // Stock numérico para insumos
       const { data: maint } = await supabase.from('maintenanceItems').select('*');
-      if (maint && maint.length > 0) setMaintenanceItems(maint);
+      if (maint && maint.length > 0) {
+        setMaintenanceItems(maint.map((m: any) => ({ ...m, stock: Number(m.stock || 0) })));
+      }
     };
     loadAllData();
   }, []);
 
   // =========================================================================
-  // 2. GUARDADO AUTOMÁTICO (Sincronización App -> Nube)
+  // 2. GUARDADO AUTOMÁTICO (SIMPLE Y DIRECTO)
   // =========================================================================
 
   const sync = async (table: string, data: any) => {
     if (!data || data.length === 0) return;
     const { error } = await supabase.from(table).upsert(data);
-    if (error) console.error(`❌ Error sincronizando ${table}:`, error.message);
+    if (error) console.error(`❌ Error en ${table}:`, error.message);
   };
 
-  useEffect(() => { 
-    const dbRooms = rooms.map(r => ({ ...r, number: r.name }));
-    sync('rooms', dbRooms); 
-  }, [rooms]);
+  // Guardamos habitaciones (incluyendo el nombre)
+  useEffect(() => { sync('rooms', rooms); }, [rooms]);
 
-  useEffect(() => {
-    const dbRes = reservations.map(r => ({
-      ...r,
-      deposit: r.paidAmount,
-      totalAmount: r.totalPrice,
-      numberOfPeople: r.guests
-    }));
-    sync('reservations', dbRes);
-  }, [reservations]);
+  // Guardamos reservas tal cual están en la App (porque ya creamos las columnas en SQL)
+  useEffect(() => { sync('reservations', reservations); }, [reservations]);
 
   useEffect(() => { sync('products', products); }, [products]);
   useEffect(() => { sync('clients', clients); }, [clients]);
@@ -145,6 +147,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     supabase.from('products').delete().eq('id', id).then();
   };
 
+  // BLINDAJE EXTRA: Forzar número al sumar stock
   const updateProductStock = (id: string, q: number) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, stock: Number(p.stock) + q } : p));
   };
@@ -156,6 +159,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     supabase.from('maintenanceItems').delete().eq('id', id).then();
   };
 
+  // BLINDAJE EXTRA: Forzar número al sumar stock de insumos
   const updateMaintenanceStock = (id: string, q: number) => {
     setMaintenanceItems(prev => prev.map(m => m.id === id ? { ...m, stock: Number(m.stock) + q } : m));
   };
@@ -166,6 +170,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const getRoomById = (id: string) => rooms.find(r => r.id === id);
   const getClientById = (id: string) => clients.find(c => c.id === id);
+  const restoreBackup = () => {};
 
   return (
     <AppContext.Provider value={{
@@ -173,7 +178,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       login, logout, updateRoomStatus, addRoom, updateRoom, deleteRoom, addClient, deleteClient, addReservation,
       updateReservation, deleteReservation, updateReservationStatus, addSale, addProduct, updateProduct,
       deleteProduct, updateProductStock, addMaintenanceItem, updateMaintenanceItem, deleteMaintenanceItem, 
-      updateMaintenanceStock, getRoomById, getClientById
+      updateMaintenanceStock, getRoomById, getClientById, restoreBackup
     }}>
       {children}
     </AppContext.Provider>
