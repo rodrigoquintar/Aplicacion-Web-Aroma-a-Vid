@@ -98,7 +98,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => { sync('sales', sales); }, [sales]);
   useEffect(() => { sync('maintenanceItems', maintenanceItems); }, [maintenanceItems]);
 
-  // =========================================================================
+  // ========================================================================
   // 3. FUNCIONES DE LÓGICA
   // =========================================================================
   const login = (pin: string) => {
