@@ -319,7 +319,7 @@ const Calendar: React.FC = () => {
     if (stayRes) {
         return (
             <div 
-                className="absolute inset-0 bg-emerald-50 cursor-pointer group border-x border-emerald-100/30"
+                className="absolute inset-0 bg-emerald-300 cursor-pointer group border-x border-emerald-500/30"
                 onClick={() => handleDayClick(roomId, day)}
             >
             </div>
