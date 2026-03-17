@@ -406,7 +406,7 @@ const Calendar: React.FC = () => {
         <div className="flex items-center"><span className="w-3 h-3 bg-[#10b981] rounded-sm mr-1.5"></span> Entrada</div>
         <div className="flex items-center"><span className="w-3 h-3 bg-[#f43f5e] rounded-sm mr-1.5"></span> Salida</div>
         <div className="flex items-center"><span className="w-3 h-3 rounded-sm mr-1.5" style={{ background: 'linear-gradient(135deg, #f43f5e 50%, #10b981 50%)' }}></span> Rotación</div>
-        <div className="flex items-center"><span className="w-3 h-3 bg-emerald-50 rounded-sm mr-1.5"></span> Estancia</div>
+        <div className="flex items-center"><span className="w-3 h-3 bg-emerald-300 rounded-sm mr-1.5"></span> Estancia</div>
       </div>
 
       <ReservationModal isOpen={showModal} onClose={() => { setShowModal(false); setEditingResId(null); }} editingResId={editingResId} />
