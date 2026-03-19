@@ -1,16 +1,13 @@
-
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { RoomStatus, Room } from '../types';
-import { Bed, User, Brush, Wrench, CheckCircle, Plus, Trash2, Edit, AlertTriangle, X } from 'lucide-react';
+import { Room, RoomStatus } from '../types';
+import { Plus, Edit, Trash2, Users, Home, Info, X } from 'lucide-react';
 
 const Rooms: React.FC = () => {
-  const { rooms, updateRoomStatus, addRoom, deleteRoom, updateRoom } = useApp();
+  const { rooms, addRoom, updateRoom, deleteRoom } = useApp();
   const [showModal, setShowModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
-  const [roomToDelete, setRoomToDelete] = useState<string | null>(null);
-
+  
   const [formData, setFormData] = useState<Partial<Room>>({
     number: '',
     type: 'Suite Familiar',
@@ -19,128 +16,172 @@ const Rooms: React.FC = () => {
     status: RoomStatus.AVAILABLE
   });
 
-  const getStatusColor = (status: RoomStatus) => {
-    switch (status) {
-      case RoomStatus.AVAILABLE: return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case RoomStatus.OCCUPIED: return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-      case RoomStatus.MAINTENANCE: return 'bg-rose-100 text-rose-800 border-rose-200';
-      case RoomStatus.CLEANING: return 'bg-amber-100 text-amber-800 border-amber-200';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const openModal = (room?: Room) => {
-      if (room) {
-          setEditingRoom(room);
-          setFormData(room);
-      } else {
-          setEditingRoom(null);
-          setFormData({
-            number: '',
-            type: 'Suite Familiar',
-            capacity: 4,
-            description: '',
-            status: RoomStatus.AVAILABLE
-          });
-      }
-      setShowModal(true);
+    if (room) {
+      setEditingRoom(room);
+      setFormData({ ...room });
+    } else {
+      setEditingRoom(null);
+      setFormData({
+        number: '',
+        type: 'Suite Familiar',
+        capacity: 4,
+        description: '',
+        status: RoomStatus.AVAILABLE
+      });
+    }
+    setShowModal(true);
   };
 
-  const handleSave = () => {
-      if (!formData.number) return alert('El número/nombre es obligatorio');
+  const handleSave = async () => {
+    if (!formData.number) return alert('El nombre o número de departamento es obligatorio');
+
+    const roomData = {
+      ...formData,
+      id: editingRoom ? editingRoom.id : `room-${Date.now()}`,
+      capacity: Number(formData.capacity || 0)
+    } as Room;
+
+    try {
       if (editingRoom) {
-          updateRoom({ ...formData, id: editingRoom.id } as Room);
+        await updateRoom(roomData);
       } else {
-          addRoom({ ...formData, id: `room-${Date.now()}`, status: RoomStatus.AVAILABLE } as Room);
+        await addRoom(roomData);
       }
       setShowModal(false);
+      setEditingRoom(null);
+    } catch (error) {
+      alert("Error al guardar los cambios en Supabase");
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-slate-900">Gestión de Departamentos</h2>
-        <button onClick={() => openModal()} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 font-bold">
-            <Plus size={18} className="mr-2" /> Agregar Departamento
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Departamentos</h2>
+          <p className="text-slate-500 font-medium">Gestión de unidades de Aroma a Vid</p>
+        </div>
+        <button 
+          onClick={() => openModal()}
+          className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 font-black text-xs tracking-widest uppercase"
+        >
+          <Plus size={16} className="mr-2" /> NUEVA UNIDAD
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {rooms.map((room) => (
-          <div key={room.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl transition-all flex flex-col overflow-hidden">
-            <div className="flex justify-between items-start p-6 pb-4">
-                <div className="pr-2">
-                   <h3 className="text-2xl font-black text-slate-900 truncate">{room.number}</h3>
-                   <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">{room.type}</p>
-                </div>
-                <div className="flex gap-2">
-                    <button onClick={() => openModal(room)} className="h-10 w-10 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100"><Edit size={18} /></button>
-                    <button onClick={() => { setRoomToDelete(room.id); setShowDeleteModal(true); }} className="h-10 w-10 flex items-center justify-center bg-rose-50 text-rose-600 rounded-xl border border-rose-100"><Trash2 size={18} /></button>
-                </div>
-            </div>
-
-            <div className="px-6 pb-6 flex-1 flex flex-col">
-              <div className="mb-4">
-                  <span className={`px-4 py-1.5 rounded-full text-xs font-black border uppercase tracking-widest ${getStatusColor(room.status)}`}>
-                    {room.status}
-                  </span>
+        {rooms.map((room: Room) => (
+          <div key={room.id} className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <Home size={24} />
               </div>
-              <div className="space-y-3 mb-6 flex-1 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <div className="flex items-center text-slate-700 text-sm">
-                  <User size={16} className="mr-2 text-indigo-500" />
-                  <span className="font-bold">Capacidad: {room.capacity} personas</span>
-                </div>
-                {room.description && <p className="text-[11px] text-slate-500 mt-2 italic border-t border-slate-200 pt-3">{room.description}</p>}
-              </div>
-
-              <div className="flex gap-3">
-                {room.status !== RoomStatus.OCCUPIED ? (
-                    <button onClick={() => updateRoomStatus(room.id, room.status === RoomStatus.AVAILABLE ? RoomStatus.MAINTENANCE : RoomStatus.AVAILABLE)} 
-                            className="flex-1 bg-white border-2 border-slate-200 text-slate-600 py-3 rounded-xl text-sm font-black transition-all">
-                        {room.status === RoomStatus.AVAILABLE ? 'Mantenimiento' : 'Habilitar'}
-                    </button>
-                ) : (
-                    <div className="w-full text-center text-sm font-black text-indigo-700 py-3 bg-indigo-50 rounded-xl border-2 border-indigo-100 flex justify-center items-center">
-                        <User size={18} className="mr-2" /> Ocupado
-                    </div>
-                )}
+              <div className="flex gap-1">
+                <button onClick={() => openModal(room)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                  <Edit size={18} />
+                </button>
+                <button onClick={() => { if(window.confirm('¿Eliminar esta unidad?')) deleteRoom(room.id) }} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                  <Trash2 size={18} />
+                </button>
               </div>
             </div>
+
+            <div className="space-y-1 mb-4">
+              <h3 className="text-xl font-black text-slate-900 uppercase">{room.number}</h3>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">{room.type}</p>
+            </div>
+
+            <div className="flex items-center gap-4 py-4 border-y border-slate-50 mb-4">
+              <div className="flex items-center text-slate-600">
+                <Users size={16} className="mr-2" />
+                <span className="font-black text-sm">{room.capacity} Pers.</span>
+              </div>
+              <div className={`ml-auto px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                room.status === RoomStatus.AVAILABLE ? 'bg-emerald-50 text-emerald-600' : 
+                room.status === RoomStatus.OCCUPIED ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+              }`}>
+                {room.status}
+              </div>
+            </div>
+
+            {room.description && (
+              <p className="text-slate-500 text-sm line-clamp-2 italic mb-2">"{room.description}"</p>
+            )}
           </div>
         ))}
       </div>
 
-       {showModal && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 px-4 p-4 overflow-y-auto">
-              <div className="bg-white p-8 rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
-                  <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
-                      <h3 className="text-2xl font-black text-slate-900">{editingRoom ? 'Editar Departamento' : 'Nuevo Departamento'}</h3>
-                      <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-900 bg-slate-100 p-2 rounded-full"><X size={24}/></button>
-                  </div>
-                  <div className="space-y-5">
-                      <input type="text" className="w-full border-2 border-slate-200 rounded-2xl p-4 text-slate-900 font-bold bg-white" placeholder="Nombre/Número" value={formData.number} onChange={e => setFormData({...formData, number: e.target.value})} />
-                      <input type="text" className="w-full border-2 border-slate-200 rounded-2xl p-4 text-slate-900 font-bold bg-white" placeholder="Tipo (Suite, Eco...)" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} />
-                      <input type="number" className="w-full border-2 border-slate-200 rounded-2xl p-4 text-slate-900 font-bold bg-white" placeholder="Capacidad" value={formData.capacity} onChange={e => setFormData({...formData, capacity: parseInt(e.target.value)})} />
-                      <textarea className="w-full border-2 border-slate-200 rounded-2xl p-4 text-slate-900 font-medium bg-white" rows={3} placeholder="Descripción..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                  </div>
-                  <div className="mt-10 flex gap-4">
-                      <button onClick={() => setShowModal(false)} className="flex-1 py-4 text-slate-600 font-black">Cancelar</button>
-                      <button onClick={handleSave} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black">Guardar</button>
-                  </div>
-              </div>
-          </div>
-       )}
-
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[60] px-4">
-            <div className="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center border border-slate-200">
-                <AlertTriangle size={40} className="mx-auto text-rose-600 mb-6" />
-                <h3 className="text-2xl font-black text-slate-900 mb-2 text-center w-full">¿Eliminar?</h3>
-                <div className="flex gap-4 mt-8">
-                    <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-black">No</button>
-                    <button onClick={() => { deleteRoom(roomToDelete!); setShowDeleteModal(false); }} className="flex-1 py-3.5 bg-rose-600 text-white rounded-xl font-black">Sí, borrar</button>
-                </div>
+      {/* Modal de Edición/Creación */}
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">
+                {editingRoom ? 'Editar Unidad' : 'Nueva Unidad'}
+              </h3>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-900 bg-slate-50 p-2 rounded-full">
+                <X size={20}/>
+              </button>
             </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">Nombre / Número</label>
+                <input 
+                  type="text" 
+                  className="w-full border-2 border-slate-100 rounded-2xl p-4 bg-slate-50/50 text-slate-900 font-black focus:border-indigo-500 outline-none transition-all"
+                  value={formData.number} 
+                  onChange={e => setFormData({...formData, number: e.target.value})}
+                  placeholder="Ej: Depto 1 o Suite Sol"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">Tipo</label>
+                  <select 
+                    className="w-full border-2 border-slate-100 rounded-2xl p-4 bg-slate-50/50 text-slate-900 font-black outline-none"
+                    value={formData.type} 
+                    onChange={e => setFormData({...formData, type: e.target.value as any})}
+                  >
+                    <option value="Suite Familiar">Familiar</option>
+                    <option value="Doble">Doble</option>
+                    <option value="Triple">Triple</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">Capacidad</label>
+                  <div className="relative">
+                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="number" 
+                      className="w-full border-2 border-slate-100 rounded-2xl p-4 pl-12 bg-slate-50/50 text-slate-900 font-black outline-none"
+                      value={formData.capacity} 
+                      onChange={e => setFormData({...formData, capacity: Number(e.target.value)})}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">Descripción / Notas</label>
+                <textarea 
+                  className="w-full border-2 border-slate-100 rounded-2xl p-4 bg-slate-50/50 text-slate-900 font-medium outline-none h-24 resize-none"
+                  value={formData.description} 
+                  onChange={e => setFormData({...formData, description: e.target.value})}
+                  placeholder="Detalles adicionales..."
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 flex gap-3">
+              <button onClick={() => setShowModal(false)} className="flex-1 py-4 text-slate-400 font-black text-xs uppercase tracking-widest">Cancelar</button>
+              <button onClick={handleSave} className="flex-[2] py-4 bg-indigo-600 text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-lg shadow-indigo-100 active:scale-95 transition-all">
+                {editingRoom ? 'Guardar Cambios' : 'Crear Unidad'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
