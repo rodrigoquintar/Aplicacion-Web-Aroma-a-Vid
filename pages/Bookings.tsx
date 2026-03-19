@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { ReservationStatus, Room, Client, PaymentStatus, Reservation } from '../types';
-import { Search, Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Users, Phone } from 'lucide-react';
+import { Search, Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Users, DollarSign } from 'lucide-react';
 
+// Componente de Calendario interno para el Modal
 const MiniCalendar = ({ selectedDate, onChange, label, minDate }: { selectedDate: string, onChange: (date: string) => void, label: string, minDate?: string }) => {
     const [viewDate, setViewDate] = useState(selectedDate ? new Date(selectedDate) : new Date());
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -66,7 +66,7 @@ const MiniCalendar = ({ selectedDate, onChange, label, minDate }: { selectedDate
 };
 
 const Bookings: React.FC = () => {
-  const { reservations, rooms, clients, updateReservationStatus, addReservation, updateReservation, deleteReservation, addClient } = useApp();
+  const { reservations, rooms, clients, addReservation, updateReservation, deleteReservation, addClient } = useApp();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -85,6 +85,7 @@ const Bookings: React.FC = () => {
       firstName: '', lastName: '', platform: '', phone: ''
   });
 
+  // Lógica de disponibilidad
   useEffect(() => {
     if (dates.checkIn && dates.checkOut) {
         const start = new Date(dates.checkIn + 'T00:00:00');
@@ -111,6 +112,7 @@ const Bookings: React.FC = () => {
     setNumPeople(1);
     setEditingResId(null);
     setIsAddingClient(false);
+    setNewClientData({ firstName: '', lastName: '', platform: '', phone: '' });
   };
 
   const handleOpenEdit = (res: Reservation) => {
@@ -127,7 +129,6 @@ const Bookings: React.FC = () => {
   const handleSaveReservation = () => {
      if(!selectedRoomId || !selectedClientId || !dates.checkIn || !dates.checkOut) return alert("Complete todos los campos.");
      
-     // El ID ahora tiene el mes al principio como solicitó el usuario
      const monthPrefix = dates.checkIn.split('-')[1];
      const reservationData: Reservation = {
          id: editingResId || `${monthPrefix}-${Date.now().toString().slice(-4)}`,
@@ -158,18 +159,18 @@ const Bookings: React.FC = () => {
       const matchesStatus = filter === 'all' || res.status === filter;
       return matchesSearch && matchesStatus;
     })
-    // Orden descendente por fecha de Check-in (más recientes primero)
     .sort((a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime()); 
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-black text-slate-900 tracking-tight">Reservas</h2>
-        <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 font-black uppercase text-sm tracking-widest">
-          <Plus size={18} className="mr-2" /> NUEVA RESERVA
+        <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 font-black uppercase text-xs tracking-widest">
+          <Plus size={16} className="mr-2" /> NUEVA RESERVA
         </button>
       </div>
 
+      {/* Buscador y Filtro */}
       <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex flex-row gap-2">
         <div className="relative flex-[4]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
@@ -188,14 +189,15 @@ const Bookings: React.FC = () => {
         </select>
       </div>
 
+      {/* Tabla de Reservas */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest border-b border-slate-100">
+              <tr className="bg-slate-50 text-slate-500 text-[9px] uppercase tracking-widest border-b border-slate-100">
                 <th className="p-4 font-black">Entrada</th>
                 <th className="p-4 font-black">Cliente</th>
-                <th className="p-4 font-black text-center">Depto</th>
+                <th className="p-4 font-black text-center">Debe</th>
                 <th className="p-4 font-black text-right">Acciones</th>
               </tr>
             </thead>
@@ -204,20 +206,26 @@ const Bookings: React.FC = () => {
                   const client = clients.find(c => c.id === res.clientId);
                   const room = rooms.find(r => r.id === res.roomId);
                   const checkInDate = new Date(res.checkIn + 'T00:00:00');
+                  const balance = res.totalAmount - (res.deposit || 0);
                   return (
                     <tr key={res.id} className="hover:bg-indigo-50/20 transition-colors text-xs">
                         <td className="p-4">
                             <div className="font-black text-indigo-600">{checkInDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}</div>
-                            <div className="text-[9px] text-slate-400 font-bold">ID: {res.id}</div>
+                            <div className="text-[8px] text-slate-400 font-bold uppercase">{room?.number}</div>
                         </td>
                         <td className="p-4">
-                            <div className="font-black text-slate-900 uppercase">{client?.lastName}, {client?.firstName}</div>
+                            <div className="font-black text-slate-900 uppercase truncate max-w-[100px]">{client?.lastName}, {client?.firstName}</div>
+                            <div className="text-[8px] text-slate-400 font-bold uppercase">{client?.platform}</div>
                         </td>
-                        <td className="p-4 text-center font-black text-slate-600">{room?.number.replace('Depto ', '')}</td>
+                        <td className="p-4 text-center">
+                            <span className={`font-black px-2 py-1 rounded-lg ${balance > 0 ? 'text-rose-600 bg-rose-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                                ${balance}
+                            </span>
+                        </td>
                         <td className="p-4 text-right">
                             <div className="flex justify-end items-center gap-1">
-                                <button onClick={() => handleOpenEdit(res)} className="p-2 text-indigo-600 bg-indigo-50 rounded-lg"><Edit size={14} /></button>
-                                <button onClick={() => deleteReservation(res.id)} className="p-2 text-rose-600 bg-rose-50 rounded-lg"><Trash2 size={14} /></button>
+                                <button onClick={() => handleOpenEdit(res)} className="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"><Edit size={14} /></button>
+                                <button onClick={() => { if(window.confirm('¿Eliminar reserva?')) deleteReservation(res.id) }} className="p-2 text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={14} /></button>
                             </div>
                         </td>
                     </tr>
@@ -228,6 +236,7 @@ const Bookings: React.FC = () => {
         </div>
       </div>
 
+      {/* Modal de Nueva/Editar Reserva */}
       {showModal && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[100] p-2 overflow-y-auto">
               <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-2xl border border-slate-200 animate-in zoom-in duration-200">
@@ -236,85 +245,60 @@ const Bookings: React.FC = () => {
                       <button onClick={() => { setShowModal(false); resetForm(); }} className="text-slate-400 hover:text-slate-900 bg-slate-100 p-2 rounded-full transition-colors"><X size={20}/></button>
                   </div>
                   <div className="p-6 space-y-6">
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                           <MiniCalendar label="Entrada" selectedDate={dates.checkIn} onChange={(d) => setDates(prev => ({ ...prev, checkIn: d }))} />
-                           <MiniCalendar label="Salida" selectedDate={dates.checkOut} onChange={(d) => setDates(prev => ({ ...prev, checkOut: d }))} minDate={dates.checkIn} />
-                       </div>
-                       
-                       <div className="space-y-6">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="sm:col-span-1">
-                                    <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest ml-1">Depto</label>
-                                    <select className="w-full border-2 border-slate-100 rounded-2xl p-4 bg-slate-50/50 text-slate-900 font-black" value={selectedRoomId} onChange={e => setSelectedRoomId(e.target.value)}>
-                                        <option value="">ELIJA UN DEPARTAMENTO...</option>
-                                        {availableRooms.map(room => (<option key={room.id} value={room.id}>{room.number}</option>))}
-                                        {editingResId && <option value={selectedRoomId}>{rooms.find(r => r.id === selectedRoomId)?.number} (Actual)</option>}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest ml-1">Cant. Personas</label>
-                                    <div className="relative">
-                                        <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input type="number" className="w-full border-2 border-slate-100 rounded-2xl p-4 pl-12 bg-slate-50/50 text-slate-900 font-black outline-none" value={numPeople === 0 ? '' : numPeople} onChange={e => setNumPeople(e.target.value === '' ? 0 : Number(e.target.value))} />
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <MiniCalendar label="Entrada" selectedDate={dates.checkIn} onChange={(d) => setDates(prev => ({ ...prev, checkIn: d }))} />
+                            <MiniCalendar label="Salida" selectedDate={dates.checkOut} onChange={(d) => setDates(prev => ({ ...prev, checkOut: d }))} minDate={dates.checkIn} />
+                        </div>
+                        
+                        <div className="space-y-6">
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                 <div>
+                                     <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest ml-1">Departamento</label>
+                                     <select className="w-full border-2 border-slate-100 rounded-2xl p-4 bg-slate-50/50 text-slate-900 font-black" value={selectedRoomId} onChange={e => setSelectedRoomId(e.target.value)}>
+                                         <option value="">ELIJA UN DEPARTAMENTO...</option>
+                                         {availableRooms.map(room => (<option key={room.id} value={room.id}>{room.number}</option>))}
+                                         {editingResId && <option value={selectedRoomId}>{rooms.find(r => r.id === selectedRoomId)?.number} (Actual)</option>}
+                                     </select>
+                                 </div>
+                                 <div>
+                                     <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest ml-1">Cant. Personas</label>
+                                     <div className="relative">
+                                         <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                         <input type="number" className="w-full border-2 border-slate-100 rounded-2xl p-4 pl-12 bg-slate-50/50 text-slate-900 font-black outline-none" value={numPeople === 0 ? '' : numPeople} onChange={e => setNumPeople(e.target.value === '' ? 0 : Number(e.target.value))} />
+                                     </div>
+                                 </div>
+                             </div>
 
-                            {!isAddingClient ? (
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest ml-1">Cliente</label>
-                                    <select className="w-full border-2 border-slate-100 rounded-2xl p-4 bg-slate-50/50 text-slate-900 font-black" value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)}>
-                                        <option value="">SELECCIONAR CLIENTE...</option>
-                                        {clients.map(c => <option key={c.id} value={c.id}>{c.lastName}, {c.firstName} ({c.platform})</option>)}
-                                    </select>
-                                    <button onClick={() => setIsAddingClient(true)} className="text-[10px] font-black text-indigo-600 mt-2 uppercase underline">Crear nuevo cliente</button>
-                                </div>
-                            ) : (
-                                <div className="bg-indigo-50/50 p-4 rounded-3xl border-2 border-indigo-100/50 space-y-4">
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <input type="text" placeholder="NOMBRE" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.firstName} onChange={e => setNewClientData({...newClientData, firstName: e.target.value})} />
-                                        <input type="text" placeholder="APELLIDO" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.lastName} onChange={e => setNewClientData({...newClientData, lastName: e.target.value})} />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <input type="text" placeholder="PLATAFORMA" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.platform} onChange={e => setNewClientData({...newClientData, platform: e.target.value})} />
-                                        <input type="text" placeholder="TELÉFONO" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.phone} onChange={e => setNewClientData({...newClientData, phone: e.target.value})} />
-                                    </div>
-                                    <button onClick={() => {
-                                        const newId = `c-${Date.now()}`;
-                                        addClient({...newClientData, id: newId} as Client);
-                                        setSelectedClientId(newId);
-                                        setIsAddingClient(false);
-                                    }} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Registrar y Usar</button>
-                                </div>
-                            )}
+                             {!isAddingClient ? (
+                                 <div>
+                                     <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest ml-1">Cliente</label>
+                                     <select className="w-full border-2 border-slate-100 rounded-2xl p-4 bg-slate-50/50 text-slate-900 font-black" value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)}>
+                                         <option value="">SELECCIONAR CLIENTE...</option>
+                                         {clients.map(c => <option key={c.id} value={c.id}>{c.lastName}, {c.firstName} ({c.platform})</option>)}
+                                     </select>
+                                     <button onClick={() => setIsAddingClient(true)} className="text-[10px] font-black text-indigo-600 mt-2 uppercase underline">Crear nuevo cliente</button>
+                                 </div>
+                             ) : (
+                                 <div className="bg-indigo-50/50 p-4 rounded-3xl border-2 border-indigo-100/50 space-y-4">
+                                     <div className="grid grid-cols-2 gap-3">
+                                         <input type="text" placeholder="NOMBRE" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.firstName} onChange={e => setNewClientData({...newClientData, firstName: e.target.value})} />
+                                         <input type="text" placeholder="APELLIDO" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.lastName} onChange={e => setNewClientData({...newClientData, lastName: e.target.value})} />
+                                     </div>
+                                     <div className="grid grid-cols-2 gap-3">
+                                         <input type="text" placeholder="PLATAFORMA" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.platform} onChange={e => setNewClientData({...newClientData, platform: e.target.value})} />
+                                         <input type="text" placeholder="TELÉFONO" className="w-full p-3 rounded-xl border-2 border-white font-black text-xs uppercase" value={newClientData.phone} onChange={e => setNewClientData({...newClientData, phone: e.target.value})} />
+                                     </div>
+                                     <button onClick={() => {
+                                         const newId = `c-${Date.now()}`;
+                                         addClient({...newClientData, id: newId} as Client);
+                                         setSelectedClientId(newId);
+                                         setIsAddingClient(false);
+                                     }} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Registrar y Usar</button>
+                                 </div>
+                             )}
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-indigo-50/50 p-4 rounded-2xl border-2 border-indigo-100/30">
-                                    <label className="block text-[10px] font-black text-indigo-900 mb-2 uppercase tracking-widest">Importe Total ($)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-indigo-600 font-black text-lg">$</span>
-                                        <input type="number" className="w-full bg-transparent text-slate-900 font-black text-3xl outline-none pl-6" value={totalPrice === 0 ? '' : totalPrice} onChange={e => setTotalPrice(e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0" />
-                                    </div>
-                                </div>
-                                <div className="bg-amber-50/50 p-4 rounded-2xl border-2 border-amber-100/30">
-                                    <label className="block text-[10px] font-black text-amber-900 mb-2 uppercase tracking-widest">Monto Seña ($)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-amber-600 font-black text-lg">$</span>
-                                        <input type="number" className="w-full bg-transparent text-slate-900 font-black text-3xl outline-none pl-6" value={deposit === 0 ? '' : deposit} onChange={e => setDeposit(e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0" />
-                                    </div>
-                                </div>
-                            </div>
-                       </div>
-                  </div>
-                  <div className="p-4 border-t-2 border-slate-50 bg-slate-50 sticky bottom-0 flex gap-3">
-                      <button onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 py-4 text-slate-400 font-black text-xs uppercase tracking-widest">Cerrar</button>
-                      <button onClick={handleSaveReservation} className="flex-[2] py-4 bg-indigo-600 text-white rounded-xl font-black text-sm uppercase shadow-lg shadow-indigo-100 tracking-widest active:scale-95 transition-all">Guardar Reserva</button>
-                  </div>
-              </div>
-          </div>
-      )}
-    </div>
-  );
-};
-
-export default Bookings;
+                             <div className="grid grid-cols-2 gap-4">
+                                 <div className="bg-indigo-50/50 p-4 rounded-2xl border-2 border-indigo-100/30">
+                                     <label className="block text-[10px] font-black text-indigo-900 mb-2 uppercase tracking-widest">Importe Total ($)</label>
+                                     <div className="relative">
+                                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-indigo-600
