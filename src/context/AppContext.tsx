@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-// 🔴 Usamos el cliente centralizado que configuramos para Vercel
-import { supabase } from '../supabaseClient'; 
+import { createClient } from '@supabase/supabase-js';
 import { Room, Client, Product, Reservation, Sale, MaintenanceItem, User } from '../types';
 import { INITIAL_ROOMS, INITIAL_CLIENTS, INITIAL_PRODUCTS, INITIAL_RESERVATIONS, INITIAL_MAINTENANCE_ITEMS } from '../constants';
 
-// Configuración de usuarios y pines de Aroma a Vid
+const supabaseUrl = 'https://iwpydnfpgxulocinakyg.supabase.co';
+const supabaseAnonKey = 'sb_publishable_qY7uXtVTaiqUzyOsHu2s8A_Q06ej0cZ'; 
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 const PIN_ADMIN = "0209";
 const PIN_REC = "1011";
 
@@ -14,58 +16,174 @@ const USERS: Record<string, User> = {
 };
 
 export const AppContext = createContext<any>(null);
+import { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "../supabaseClient";
+
+/* ===============================
+   TIPOS
+   =============================== */
+export interface Reservation {
+  id: string;
+  clientId: string;
+  roomId: string;
+  checkIn: string;
+  checkOut: string;
+  checkInTime: string;
+  checkOutTime: string;
+  totalPrice: number;
+  paidAmount: number;
+  deposit: number;
+  guests: number;
+  status: string;
+  notes?: string;
+}
+
+export interface Room {
+  id: string;
+  number: string;
+  type?: string;
+  price: number;
+  capacity?: number;
+  status?: string;
+}
+
+interface AppContextType {
+  reservas: Reservation[];
+  rooms: Room[];
+  loading: boolean;
+  crearReserva: (data: Partial<Reservation>) => Promise<boolean>;
+  actualizarReserva: (
+    id: string,
+    cambios: Partial<Reservation>
+  ) => Promise<void>;
+  actualizarRoom: (id: string, cambios: Partial<Room>) => Promise<void>;
+}
+
+/* ===============================
+   CONTEXTO
+   =============================== */
+const AppContext = createContext<AppContextType>({} as AppContextType);
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [reservas, setReservas] = useState<Reservation[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  /* ===============================
+     CARGA INICIAL
+     =============================== */
+  const cargarReservas = async () => {
+    const { data } = await supabase
+      .from("reservations")
+      .select("*")
+      .order("checkIn", { ascending: true });
+
+    setReservas((data as Reservation[]) || []);
+  };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Manejo de Sesión
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('AROMA_SESSION');
     return saved ? JSON.parse(saved) : null;
   });
+  const cargarRooms = async () => {
+    const { data } = await supabase
+      .from("rooms")
+      .select("*")
+      .order("number", { ascending: true });
 
-  // Estados de la Aplicación
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>(INITIAL_MAINTENANCE_ITEMS);
   const [reservations, setReservations] = useState<Reservation[]>(INITIAL_RESERVATIONS);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [loading, setLoading] = useState(true);
+    setRooms((data as Room[]) || []);
+  };
 
-  // 1. CARGAR DATOS DESDE SUPABASE AL INICIAR
+  // 1. CARGAR DATOS AL INICIO
   useEffect(() => {
     const loadData = async () => {
-      try {
-        const { data: r } = await supabase.from('rooms').select('*');
-        if (r && r.length > 0) setRooms(r);
-        
-        const { data: res } = await supabase.from('reservations').select('*');
-        if (res && res.length > 0) setReservations(res);
+      console.log("Cargando datos desde la nube...");
+      
+      const { data: r } = await supabase.from('rooms').select('*');
+      if (r && r.length > 0) setRooms(r);
+      
+      const { data: cl } = await supabase.from('clients').select('*');
+      if (cl && cl.length > 0) setClients(cl);
 
-        const { data: cl } = await supabase.from('clients').select('*');
-        if (cl && cl.length > 0) setClients(cl);
-      } catch (error) {
-        console.error("Error cargando datos de Supabase:", error);
-      } finally {
-        setLoading(false);
-      }
+      const { data: res } = await supabase.from('reservations').select('*');
+      if (res && res.length > 0) setReservations(res);
     };
     loadData();
+    Promise.all([cargarReservas(), cargarRooms()]).finally(() =>
+      setLoading(false)
+    );
   }, []);
 
-  // 2. GUARDADO AUTOMÁTICO (Sincronización con Supabase)
+  // 2. GUARDADO AUTOMÁTICO (Sincronizado con los nombres de tu tabla SQL)
   useEffect(() => {
-    if (rooms.length > 0) supabase.from('rooms').upsert(rooms).then();
+    if (rooms.length > 0) {
+      supabase.from('rooms').upsert(rooms).then(({ error }) => {
+        if (error) console.error("Error guardando habitaciones:", error.message);
+      });
+    }
   }, [rooms]);
 
   useEffect(() => {
-    if (reservations.length > 0) supabase.from('reservations').upsert(reservations).then();
-  }, [reservations]);
+    if (clients.length > 0) {
+      supabase.from('clients').upsert(clients).then(({ error }) => {
+        if (error) console.error("Error guardando clientes:", error.message);
+      });
+    }
+  }, [clients]);
+  /* ===============================
+     ACCIONES
+     =============================== */
+  const crearReserva = async (data: Partial<Reservation>) => {
+    const reserva: Reservation = {
+      id: crypto.randomUUID(),
+      clientId: data.clientId!,
+      roomId: data.roomId!,
+      checkIn: data.checkIn!,
+      checkOut: data.checkOut!,
+      checkInTime: data.checkInTime || "14:00",
+      checkOutTime: data.checkOutTime || "10:00",
+      totalPrice: data.totalPrice || 0,
+      paidAmount: data.paidAmount || 0,
+      deposit: data.paidAmount || 0,
+      guests: data.guests || 1,
+      status: data.status || "confirmada",
+      notes: data.notes || "",
+    };
 
   useEffect(() => {
-    if (clients.length > 0) supabase.from('clients').upsert(clients).then();
-  }, [clients]);
+    if (reservations.length > 0) {
+      // Ajustamos los datos antes de enviar para que coincidan exactamente con la tabla SQL
+      const dataToSave = reservations.map(res => ({
+        id: res.id,
+        roomId: res.roomId,
+        clientId: res.clientId,
+        checkIn: res.checkIn,
+        checkOut: res.checkOut,
+        guests: res.guests,
+        totalPrice: res.totalPrice,
+        paidAmount: res.paidAmount,
+        status: res.status
+      }));
 
-  // Funciones de Autenticación
+      supabase.from('reservations').upsert(dataToSave).then(({ error }) => {
+        if (error) {
+          console.error("Error guardando reservas:", error.message);
+        } else {
+          console.log("✅ Reservas guardadas correctamente en Supabase");
+        }
+      });
+    }
+  }, [reservations]);
+
   const login = (pin: string) => {
     if (USERS[pin]) {
       setCurrentUser(USERS[pin]);
@@ -74,34 +192,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     return false;
   };
+    const { error } = await supabase
+      .from("reservations")
+      .insert(reserva);
 
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem('AROMA_SESSION');
   };
+    if (error) return false;
 
-  // Funciones de Gestión de Habitaciones
   const updateRoomStatus = (id: string, status: any) => {
     setRooms(prev => prev.map(r => r.id === id ? { ...r, status } : r));
   };
   const addRoom = (room: any) => setRooms(prev => [...prev, room]);
   const updateRoom = (room: any) => setRooms(prev => prev.map(r => r.id === room.id ? room : r));
-  const deleteRoom = (id: string) => setRooms(prev => prev.filter(r => r.id !== id));
+  const deleteRoom = (id: string) => {
+    setRooms(prev => prev.filter(r => r.id !== id));
+    supabase.from('rooms').delete().eq('id', id).then();
+  };
   
-  // Funciones de Gestión de Reservas
   const addReservation = (res: any) => setReservations(prev => [...prev, res]);
   const updateReservation = (res: any) => setReservations(prev => prev.map(r => r.id === res.id ? res : r));
   const deleteReservation = (id: string) => {
-    setReservations(prev => prev.filter(r => r.id !== id));
-    supabase.from('reservations').delete().eq('id', id).then();
-  };
-  const updateReservationStatus = (id: string, status: any) => {
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+     setReservations(prev => prev.filter(r => r.id !== id));
+     supabase.from('reservations').delete().eq('id', id).then();
+    await cargarReservas();
+    return true;
   };
 
-  // Clientes y otros
   const addClient = (client: any) => setClients(prev => [...prev, client]);
-  const deleteClient = (id: string) => setClients(prev => prev.filter(c => c.id !== id));
+  const deleteClient = (id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id));
+    supabase.from('clients').delete().eq('id', id).then();
+  const actualizarReserva = async (
+    id: string,
+    cambios: Partial<Reservation>
+  ) => {
+    await supabase.from("reservations").update(cambios).eq("id", id);
+    await cargarReservas();
+  };
+
   const addSale = (sale: any) => setSales(prev => [...prev, sale]);
   const addProduct = (p: any) => setProducts(prev => [...prev, p]);
   const updateProduct = (p: any) => setProducts(prev => prev.map(item => item.id === p.id ? p : item));
@@ -114,22 +245,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteMaintenanceItem = (id: string) => setMaintenanceItems(prev => prev.filter(m => m.id !== id));
   const updateMaintenanceStock = (id: string, q: number) => {
     setMaintenanceItems(prev => prev.map(m => m.id === id ? { ...m, stock: m.stock + q } : m));
+  const actualizarRoom = async (id: string, cambios: Partial<Room>) => {
+    await supabase.from("rooms").update(cambios).eq("id", id);
+    await cargarRooms();
   };
-
-  // Auxiliares
+  const updateReservationStatus = (id: string, status: any) => {
+    setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  };
   const getRoomById = (id: string) => rooms.find(r => r.id === id);
   const getClientById = (id: string) => clients.find(c => c.id === id);
   const restoreBackup = () => {};
 
   return (
     <AppContext.Provider value={{
-      rooms, clients, products, maintenanceItems, reservations, sales, currentUser, loading,
-      isLoggedIn: !!currentUser,
+      rooms, clients, products, maintenanceItems, reservations, sales, currentUser, isLoggedIn: !!currentUser,
       login, logout, updateRoomStatus, addRoom, updateRoom, deleteRoom, addClient, deleteClient, addReservation,
       updateReservation, deleteReservation, updateReservationStatus, addSale, addProduct, updateProduct,
       deleteProduct, updateProductStock, addMaintenanceItem, updateMaintenanceItem, deleteMaintenanceItem, 
       updateMaintenanceStock, getRoomById, getClientById, restoreBackup
     }}>
+    <AppContext.Provider
+      value={{
+        reservas,
+        rooms,
+        loading,
+        crearReserva,
+        actualizarReserva,
+        actualizarRoom,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
@@ -140,3 +284,4 @@ export const useApp = () => {
   if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
 };
+export const useApp = () => useContext(AppContext);
