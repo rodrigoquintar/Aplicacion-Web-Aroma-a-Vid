@@ -301,4 +301,29 @@ const Bookings: React.FC = () => {
                                  <div className="bg-indigo-50/50 p-4 rounded-2xl border-2 border-indigo-100/30">
                                      <label className="block text-[10px] font-black text-indigo-900 mb-2 uppercase tracking-widest">Importe Total ($)</label>
                                      <div className="relative">
-                                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-indigo-600
+                                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-indigo-600 font-black text-lg">$</span>
+                                         <input type="number" className="w-full bg-transparent text-slate-900 font-black text-3xl outline-none pl-6" value={totalPrice === 0 ? '' : totalPrice} onChange={e => setTotalPrice(e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0" />
+                                     </div>
+                                 </div>
+                                 <div className="bg-amber-50/50 p-4 rounded-2xl border-2 border-amber-100/30">
+                                     <label className="block text-[10px] font-black text-amber-900 mb-2 uppercase tracking-widest">Monto Seña ($)</label>
+                                     <div className="relative">
+                                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-amber-600 font-black text-lg">$</span>
+                                         <input type="number" className="w-full bg-transparent text-slate-900 font-black text-3xl outline-none pl-6" value={deposit === 0 ? '' : deposit} onChange={e => setDeposit(e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0" />
+                                     </div>
+                                 </div>
+                             </div>
+                        </div>
+                  </div>
+                  <div className="p-4 border-t-2 border-slate-50 bg-slate-50 sticky bottom-0 flex gap-3">
+                      <button onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 py-4 text-slate-400 font-black text-xs uppercase tracking-widest">Cerrar</button>
+                      <button onClick={handleSaveReservation} className="flex-[2] py-4 bg-indigo-600 text-white rounded-xl font-black text-sm uppercase shadow-lg shadow-indigo-100 tracking-widest active:scale-95 transition-all">Guardar Reserva</button>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  );
+};
+
+export default Bookings;
