@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Room, Client, Product, Reservation, Sale, MaintenanceItem, User } from '../types';
-import { INITIAL_ROOMS, INITIAL_CLIENTS, INITIAL_PRODUCTS, INITIAL_RESERVATIONS, INITIAL_MAINTENANCE_ITEMS } from '../constants';
+import { INITIAL_ROOMS, INITIAL_CLIENTS } from '../constants';
 
 const supabaseUrl = 'https://iwpydnfpgxulocinakyg.supabase.co';
 const supabaseAnonKey = 'sb_publishable_qY7uXtVTaiqUzyOsHu2s8A_Q06ej0cZ'; 
@@ -30,7 +30,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
 
-  // 1. CARGA DE DATOS INICIAL
+  // 1. CARGA DE DATOS (Adaptando nombres de DB a la App)
   useEffect(() => {
     const loadAllData = async () => {
       const { data: r } = await supabase.from('rooms').select('*');
@@ -41,11 +41,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const { data: res } = await supabase.from('reservations').select('*');
       if (res) {
+        // Mapeamos lo que viene de la DB a lo que usa tu Frontend
         setReservations(res.map((item: any) => ({
           ...item,
-          totalAmount: Number(item.totalAmount || 0),
+          totalAmount: Number(item.totalPrice || 0), // DB: totalPrice -> App: totalAmount
           deposit: Number(item.deposit || 0),
-          numberOfPeople: Number(item.numberOfPeople || 1),
+          numberOfPeople: Number(item.guests || 1),  // DB: guests -> App: numberOfPeople
           checkInTime: item.checkInTime || "14:00"
         })));
       }
@@ -53,16 +54,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data: prod } = await supabase.from('products').select('*');
       if (prod) setProducts(prod.map((p: any) => ({ ...p, stock: Number(p.stock || 0) })));
 
-      const { data: sls } = await supabase.from('sales').select('*');
-      if (sls) setSales(sls);
-
       const { data: maint } = await supabase.from('maintenanceItems').select('*');
       if (maint) setMaintenanceItems(maint.map((m: any) => ({ ...m, stock: Number(m.stock || 0) })));
     };
     loadAllData();
   }, []);
 
-  // 2. FUNCIONES DE HABITACIONES (ROOMS)
+  // 2. FUNCIONES DE HABITACIONES
   const addRoom = async (room: any) => {
     setRooms(prev => [...prev, room]);
     await supabase.from('rooms').upsert(room);
@@ -80,36 +78,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const updateRoomStatus = async (id: string, status: any) => {
-    setRooms(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-    await supabase.from('rooms').update({ status }).eq('id', id);
-  };
-
   const deleteRoom = async (id: string) => {
     setRooms(prev => prev.filter(r => r.id !== id));
     await supabase.from('rooms').delete().eq('id', id);
   };
 
-  // 3. FUNCIONES DE RESERVAS (BOOKINGS)
+  // 3. FUNCIONES DE RESERVAS (Aquí está la corrección de nombres para Supabase)
   const addReservation = async (res: any) => {
     setReservations(prev => [...prev, res]);
-    await supabase.from('reservations').upsert(res);
-  };
-
-  const updateReservation = async (res: any) => {
-    setReservations(prev => prev.map(r => r.id === res.id ? res : r));
-    await supabase.from('reservations').upsert({
+    await supabase.from('reservations').insert({
       id: res.id,
       clientId: res.clientId,
       roomId: res.roomId,
       checkIn: res.checkIn,
       checkOut: res.checkOut,
       status: res.status,
-      totalAmount: Number(res.totalAmount),
+      totalPrice: Number(res.totalAmount), // Enviamos como totalPrice
       deposit: Number(res.deposit),
-      numberOfPeople: Number(res.numberOfPeople),
-      checkInTime: res.checkInTime || "14:00"
+      guests: Number(res.numberOfPeople),  // Enviamos como guests
+      checkInTime: res.checkInTime || "14:00",
+      paymentStatus: res.paymentStatus || 'PENDING'
     });
+  };
+
+  const updateReservation = async (res: any) => {
+    setReservations(prev => prev.map(r => r.id === res.id ? res : r));
+    await supabase.from('reservations').update({
+      clientId: res.clientId,
+      roomId: res.roomId,
+      checkIn: res.checkIn,
+      checkOut: res.checkOut,
+      status: res.status,
+      totalPrice: Number(res.totalAmount),
+      deposit: Number(res.deposit),
+      guests: Number(res.numberOfPeople),
+      checkInTime: res.checkInTime || "14:00"
+    }).eq('id', res.id);
   };
 
   const deleteReservation = async (id: string) => {
@@ -117,21 +121,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await supabase.from('reservations').delete().eq('id', id);
   };
 
-  // 4. CLIENTES, PRODUCTOS Y OTROS
   const addClient = async (client: any) => {
     setClients(prev => [...prev, client]);
     await supabase.from('clients').upsert(client);
-  };
-
-  const updateProductStock = async (id: string, q: number) => {
-    setProducts(prev => prev.map(p => {
-      if (p.id === id) {
-        const newStock = Number(p.stock) + q;
-        supabase.from('products').update({ stock: newStock }).eq('id', id).then();
-        return { ...p, stock: newStock };
-      }
-      return p;
-    }));
   };
 
   const login = (pin: string) => {
@@ -151,8 +143,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider value={{
       rooms, clients, products, maintenanceItems, reservations, sales, currentUser, isLoggedIn: !!currentUser,
-      login, logout, updateRoomStatus, addRoom, updateRoom, deleteRoom, addClient, addReservation,
-      updateReservation, deleteReservation, updateProductStock, getRoomById: (id: string) => rooms.find(r => r.id === id),
+      login, logout, addRoom, updateRoom, deleteRoom, addClient, addReservation,
+      updateReservation, deleteReservation, 
+      getRoomById: (id: string) => rooms.find(r => r.id === id),
       getClientById: (id: string) => clients.find(c => c.id === id)
     }}>
       {children}
