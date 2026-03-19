@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-client'
+// Cambiamos "supabase-client" por "supabase-js"
+import { createClient } from '@supabase/supabase-js'
 
-// Estas variables deben coincidir con las de tu .env
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
